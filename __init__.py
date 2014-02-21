@@ -17,29 +17,29 @@ from .decorators import require_settings, require_static_settings
 from .fos import clean, exists, join
 from .utils import notice, warn, abort, do, confirm, run_in_ve
 from . import aws, git
-   
-env.debug = False 
+
+env.debug = False
 env.python = 'python2.7'
 env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
 
 if not 'django' in env:
     env.django = False
-    
+
 # Path to s3cmd.cnf in secrets repository
-env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))), 
-    'secrets', 's3cmd.cfg')
-if not os.path.exists(env.s3cmd_cfg):
-    abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
+#env.s3cmd_cfg = join(dirname(dirname(abspath(__file__))),
+#    'secrets', 's3cmd.cfg')
+#if not os.path.exists(env.s3cmd_cfg):
+#    abort("Could not find 's3cmd.cfg' repository at '%(s3cmd_cfg)s'.")
 
 # STATIC or DYNAMIC? look for config.json
 if 'project_name' in env:
-    config_json_path = join(dirname(dirname(os.path.abspath(__file__))), 
-                env.project_name, 'config.json')  
+    config_json_path = join(dirname(dirname(os.path.abspath(__file__))),
+                env.project_name, 'config.json')
 
     STATIC = os.path.exists(config_json_path)
 else:
     STATIC = False
-    
+
 DYNAMIC = not STATIC
 
 ############################################################
@@ -51,22 +51,22 @@ def _setup_env(env_type):
     env.app_user = 'apps'
     env.repo_url = 'git@github.com:NUKnightLab/%(project_name)s.git' % env
     env.settings = env_type
-    
+
     if env.settings == 'loc':
         env.doit = local    # run/local
         env.roledefs = {
-            'app': ['localhost'], 
-            'work': [], 
-            'pgis':['localhost'], 
+            'app': ['localhost'],
+            'work': [],
+            'pgis':['localhost'],
             'mongo': ['localhost']
         }
-        
+
         # base paths
         env.home_path = os.path.expanduser('~')
         env.env_path = os.getenv('WORKON_HOME') or \
             _abort("You must set the WORKON_HOME environment variable to the" \
-                " root directory for your virtual environments.")       
-        env.sites_path = dirname(dirname(os.path.abspath(__file__)))         
+                " root directory for your virtual environments.")
+        env.sites_path = dirname(dirname(os.path.abspath(__file__)))
     else:
         env.doit = run      # run/local
         env.roledefs = {'app':[], 'work':[], 'pgis':[], 'mongo':[]}
@@ -75,23 +75,23 @@ def _setup_env(env_type):
         env.home_path = join('/home', env.app_user)
         env.env_path = join(env.home_path, 'env')
         env.sites_path = join(env.home_path, 'sites')
-        
+
         if not env.hosts:
             aws.lookup_ec2_instances()
-    
+
     env.project_path = join(env.sites_path, env.project_name)
     env.log_path = join(env.home_path, 'log', env.project_name)
-    env.apache_path = join(env.home_path, 'apache')   
+    env.apache_path = join(env.home_path, 'apache')
     env.ve_path = join(env.env_path, env.project_name)
-    env.activate_path = join(env.ve_path, 'bin', 'activate') 
+    env.activate_path = join(env.ve_path, 'bin', 'activate')
     env.data_path = join(env.project_path, 'data')
-    
+
     if DYNAMIC:
         # Load db module into env.db
         db.load()
     else:
         env.build_path = join(env.project_path, 'build')
-        env.source_path = join(env.project_path, 'source')           
+        env.source_path = join(env.project_path, 'source')
 
 
 def _run_in_ve_local(command):
@@ -102,19 +102,19 @@ def _run_in_ve_local(command):
     cur_settings = env.settings
     loc()
     run_in_ve(command)
-    globals()[cur_settings]()  
+    globals()[cur_settings]()
 
 def _s3cmd_sync(src_path, bucket):
     """Sync local directory with S3 bucket"""
     repo_dir = dirname(dirname(os.path.abspath(__file__)))
-     
+
     with lcd(repo_dir):
         local('fablib/bin/s3cmd --config=%s sync' \
                 ' --rexclude ".*/\.[^/]*$"' \
                 ' --delete-removed --acl-public' \
                 ' %s/ s3://%s/' \
                 % (env.s3cmd_cfg, src_path, bucket))
-  
+
 ############################################################
 # Dynamic sites
 ############################################################
@@ -127,7 +127,7 @@ if DYNAMIC:
         """Work on production environment."""
         _setup_env('prd')
         env.aws_storage_bucket = 'media.knightlab.com/%(project_name)s' % env
-    
+
     @task
     def stg():
         """Work on staging environment."""
@@ -137,26 +137,26 @@ if DYNAMIC:
     @task
     def loc():
         """Work on local environment."""
-        _setup_env('loc')    
+        _setup_env('loc')
 
     @task
     @roles('app','work')
-    @require_settings(allow=['stg','prd'])                    
+    @require_settings(allow=['stg','prd'])
     def setup_project():
         """Setup project environment"""
         ec2.setup_ssh()
         ec2.setup_directories()
         git.clone_repo()
         ec2.setup_virtualenv()
-        ec2.build_django_siteconf()   
+        ec2.build_django_siteconf()
         ec2.install_requirements()
 
     @task
     @require_settings
     def setup(sample='n'):
-        """Setup deployment."""    
+        """Setup deployment."""
         execute(setup_project)
-        execute(db.setup, sample=sample)     
+        execute(db.setup, sample=sample)
         execute(apache.link_conf)
 
     @task
@@ -164,7 +164,7 @@ if DYNAMIC:
     @require_settings(allow=['prd','stg'], verbose=True)
     def deploy_static(force='n'):
         """
-        Sync local static files to S3.  Does not perform server operations.  
+        Sync local static files to S3.  Does not perform server operations.
         If django flag is set, will use collectstatic to move assets into a
         temporary directory, which will then be synced.  Else, syncs the
         'static' directory within the project repository.
@@ -173,24 +173,24 @@ if DYNAMIC:
 
         print 'deploying static media to S3 ...'
         repo_dir = dirname(dirname(os.path.abspath(__file__)))
-    
+
         if env.django:
-            static_root = collectstatic_settings.STATIC_ROOT     
-        
+            static_root = collectstatic_settings.STATIC_ROOT
+
             if os.path.exists(static_root):
-                shutil.rmtree(static_root)   
-                
+                shutil.rmtree(static_root)
+
             _run_in_ve_local('python manage.py collectstatic' \
                 ' --pythonpath="%s"' \
                 ' --settings=fablib.collectstatic_settings' \
                 % repo_dir)
         else:
             static_root = join(repo_dir, env.project_name, 'static')
-    
+
         _s3cmd_sync(static_root, env.aws_storage_bucket)
-            
+
         if env.django and os.path.exists(static_root):
-            shutil.rmtree(static_root)        
+            shutil.rmtree(static_root)
 
     @task
     @require_settings(allow=['prd','stg'], verbose=True)
@@ -220,9 +220,9 @@ if DYNAMIC:
             abort('Cancelling')
 
         execute(apache.unlink_conf)
-    
-        run('rm -rf %(project_path)s' % env) 
-        run('rm -rf %(log_path)s' % env) 
+
+        run('rm -rf %(project_path)s' % env)
+        run('rm -rf %(log_path)s' % env)
         run('rm -rf %(ve_path)s' % env)
 
     @task
@@ -231,20 +231,20 @@ if DYNAMIC:
         """Remove project environment and databases."""
         execute(destroy_project)
         execute(db.destroy)
-        
+
 ############################################################
 # Static sites
 ############################################################
 else:
     from . import static
-        
-    _setup_env('loc')      
+
+    _setup_env('loc')
     _config = static.load_config()
 
     # Path to cdn deployment
-    env.cdn_path = abspath(join(env.sites_path, 'cdn.knightlab.com', 
+    env.cdn_path = abspath(join(env.sites_path, 'cdn.knightlab.com',
         'app', 'libs', _config['name']))
-    
+
     @task
     def debug():
         """Setup debug settings"""
@@ -255,48 +255,48 @@ else:
         print ''
 
         if not do(prompt("Continue? (y/n): ").strip()):
-            abort('Aborting.')       
+            abort('Aborting.')
         env.debug = True
-                 
+
     @task
     def build():
-        """Build version"""   
+        """Build version"""
         # Get build config
         if not 'build' in _config:
             abort('Could not find "build" in config file')
-      
+
         # Check version
         if not 'version' in _config:
             _config['version'] = datetime.utcnow().strftime('%Y-%m-%d-%H-%M-%S')
             warn('Using development version value "%(version)s"' % _config)
             if not do(prompt("Continue? (y/n): ").strip()):
-                abort('Aborting.')      
-    
+                abort('Aborting.')
+
         notice('Building version %(version)s...' % _config)
 
         # Clean build directory
         clean(env.build_path)
-        
+
         for key, param in _config['build'].iteritems():
             getattr(static, key)(_config, param)
             #getattr(sys.modules[__name__], 'fablib.static.%s' % key)(_config, param)
-           
+
     @task
     def stage():
-        """Build/commit/tag/push version, copy to local cdn repository"""    
+        """Build/commit/tag/push version, copy to local cdn repository"""
         if not 'stage' in _config:
             abort('Could not find "stage" in config file')
 
         # Make sure cdn exists
         exists(dirname(env.cdn_path), required=True)
-    
+
         # Ask user for a new version
         _config['version'] = git.prompt_tag('Enter a new version number: ',
-            unique=True) 
-             
-        # Build version   
+            unique=True)
+
+        # Build version
         build()
-        
+
         # Commit/push/tag
         with lcd(env.project_path):
             local('git add build')
@@ -308,18 +308,18 @@ else:
                 elif not msg.startswith('[master'):
                     abort("Unexpected result: %s" % msg)
             local('git push')
-            
+
             git.push_tag(_config['version'])
-            
-        # Copy to local CDN repository        
+
+        # Copy to local CDN repository
         cdn_path = join(env.cdn_path, _config['version'])
         clean(cdn_path)
-    
+
         for r in _config['stage']:
             static.copy(_config, [{
                 "src": r['src'],
                 "dst": cdn_path, "regex": r['regex']}])
-                        
+
     @task
     def stage_latest():
         """Copy version to latest within local cdn repository"""
@@ -327,15 +327,15 @@ else:
             version = _config['version']
         else:
             version = git.prompt_tag('Which version to stage as "latest"?')
-    
+
         notice('stage_latest: %s' % version)
-    
+
         # Make sure version has been staged
         version_cdn_path = join(env.cdn_path, version)
-        if not os.path.exists(version_cdn_path): 
+        if not os.path.exists(version_cdn_path):
             abort("Version '%s' has not been staged" % version)
-      
-        # Stage version as latest           
+
+        # Stage version as latest
         latest_cdn_path = join(env.cdn_path, 'latest')
         clean(latest_cdn_path)
         static.copy(_config, [{
@@ -346,7 +346,7 @@ else:
         """Delete a tag (in case of error)"""
         version = git.prompt_tag('Which tag to delete?')
         if not version:
-            abort('No available version tag')     
+            abort('No available version tag')
         git.delete_tag(version)
 
 
@@ -355,47 +355,47 @@ else:
         """Work on production environment."""
         env.static_settings = 'prd'
 
-    
+
     @task
     def stg():
         """Work on staging environment."""
         env.static_settings = 'stg'
- 
+
     @task
     @require_static_settings(allow=['prd','stg'], verbose=True)
     def deploy():
-        """Deploy to S3 bucket.  Specify environment using prd or stg tasks."""        
+        """Deploy to S3 bucket.  Specify environment using prd or stg tasks."""
         if not 'deploy' in _config:
             abort('Could not find "deploy" in config file')
-    
+
         if not env.static_settings in _config['deploy']:
             abort('Could not find "%(settings)s" in "deploy" in config file' % env)
-            
+
         if not "bucket" in _config['deploy'][env.static_settings]:
             abort('Could not find "bucket" in deploy.%(settings)s" in config file' % env)
-            
+
         bucket = _config['deploy'][env.static_settings]['bucket']
         notice('deploying to %s' % bucket)
-           
+
         template_path = join(env.project_path, 'website', 'templates')
         deploy_path = join(env.project_path, 'build', 'website')
-    
+
         clean(deploy_path)
-    
+
         # render templates and run usemin
-        static.render_templates(template_path, deploy_path)   
+        static.render_templates(template_path, deploy_path)
         static.usemin(_config, [deploy_path])
-    
+
         # copy static files
         static.copy(_config, [{
             "src": join(env.project_path, 'website', 'static'),
             "dst": join(deploy_path, 'static')
         }])
-    
+
         # additional copy?
         if 'copy' in _config['deploy']:
             static.copy(_config, _config['deploy']['copy'])
-   
+
         # sync to S3
         _s3cmd_sync(deploy_path, bucket)
 
@@ -404,22 +404,22 @@ def serve(ssl='n'):
     """Run the development server"""
     if not 'project_path' in env:
         loc()
-        
+
     with lcd(join(env.project_path)):
         if env.django:
             local('python manage.py runserver')
         elif DYNAMIC:
             local('python api.py')
-        else:    
+        else:
             if do(ssl):
                 local('python website/app.py -s')
             else:
                 local('python website/app.py')
-                
-                         
+
+
 @task
 def dump():
     """Dump env to stdout"""
     import pprint
     pprint.pprint(env)
-  
+
